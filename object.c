@@ -94,8 +94,7 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    // TODO: Implement
-    //create header
+    // Step 1: header
     char header[64];
     const char *type_str;
 
@@ -105,28 +104,77 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     else return -1;
 
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
+    if (header_len < 0) return -1;
 
-    // total size = header + '\0' + data
     size_t total_len = header_len + 1 + len;
 
-    // allocate buffer
+    // Step 2: build full object
     char *full = malloc(total_len);
     if (!full) return -1;
 
-    // copy header
     memcpy(full, header, header_len);
     full[header_len] = '\0';
-
-    // copy data
     memcpy(full + header_len + 1, data, len);
-    
-    
+
+    // Step 3: compute hash
     ObjectID id;
     compute_hash(full, total_len, &id);
 
-    return -1;
+    // Step 4: deduplication
+    if (object_exists(&id)) {
+        *id_out = id;
+        free(full);
+        return 0;
+    }
+
+    // Step 5: get object path
+    char path[512];
+    object_path(&id, path, sizeof(path));
+
+    // extract directory path
+    char dir[512];
+    strncpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (!slash) {
+        free(full);
+        return -1;
+    }
+    *slash = '\0';
+
+    // create directory if needed
+    mkdir(dir, 0755);
+
+    // Step 6: write to temp file
+    char temp_path[512];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
+
+    int fd = open(temp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full);
+        return -1;
+    }
+
+    if (write(fd, full, total_len) != (ssize_t)total_len) {
+        close(fd);
+        free(full);
+        return -1;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    // Step 7: atomic rename
+    if (rename(temp_path, path) != 0) {
+        free(full);
+        return -1;
+    }
+
+    // Step 8: done
+    *id_out = id;
+    free(full);
+    return 0;
 }
-x
+
 
 // Read an object from the store.
 //
