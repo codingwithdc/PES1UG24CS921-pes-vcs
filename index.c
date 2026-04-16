@@ -177,14 +177,30 @@ int index_load(Index *index) {
 // Returns 0 on success, -1 on error.
 
 
+
+
+static int compare_index_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry*)a)->path, ((const IndexEntry*)b)->path);
+}
+
 int index_save(const Index *index) {
+    Index *sorted = malloc(sizeof(Index));
+    if (!sorted) return -1;
+
+    memcpy(sorted, index, sizeof(Index));
+
+    qsort(sorted->entries, sorted->count, sizeof(IndexEntry), compare_index_entries);
+
     FILE *f = fopen(".pes/index.tmp", "w");
-    if (!f) return -1;
+    if (!f) {
+        free(sorted);
+        return -1;
+    }
 
     char hash_hex[65];
 
-    for (int i = 0; i < index->count; i++) {
-        const IndexEntry *e = &index->entries[i];
+    for (int i = 0; i < sorted->count; i++) {
+        const IndexEntry *e = &sorted->entries[i];
 
         hash_to_hex(&e->hash, hash_hex);
 
@@ -196,9 +212,14 @@ int index_save(const Index *index) {
                 e->path);
     }
 
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
-    rename(".pes/index.tmp", ".pes/index");
-    return 0;
+
+    int ret = rename(".pes/index.tmp", ".pes/index");
+    free(sorted);
+
+    return ret == 0 ? 0 : -1;
 }
 
 // Stage a file for the next commit.
