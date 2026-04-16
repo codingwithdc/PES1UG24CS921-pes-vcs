@@ -95,7 +95,30 @@ int object_exists(const ObjectID *id) {
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     // TODO: Implement
-    (void)type; (void)data; (void)len; (void)id_out;
+    //create header
+    char header[64];
+    const char *type_str;
+
+    if (type == OBJ_BLOB) type_str = "blob";
+    else if (type == OBJ_TREE) type_str = "tree";
+    else if (type == OBJ_COMMIT) type_str = "commit";
+    else return -1;
+
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
+
+    // total size = header + '\0' + data
+    size_t total_len = header_len + 1 + len;
+
+    // allocate buffer
+    char *full = malloc(total_len);
+    if (!full) return -1;
+
+    // copy header
+    memcpy(full, header, header_len);
+    full[header_len] = '\0';
+
+    // copy data
+    memcpy(full + header_len + 1, data, len);
     return -1;
 }
 
