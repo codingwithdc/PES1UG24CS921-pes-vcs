@@ -196,19 +196,24 @@ int head_update(const ObjectID *new_commit) {
 
 
 int commit_create(const char *message, ObjectID *commit_id_out) {
+    // Validate inputs
     if (!message || !commit_id_out) return -1;
 
+    //Initialize commit structure
     Commit c;
     memset(&c, 0, sizeof(Commit));
 
+    //Build tree from current index (snapshot of project)
     if (tree_from_index(&c.tree) != 0)
         return -1;
 
+    //Determine parent commit (if repository already has commits)
     if (head_read(&c.parent) == 0)
         c.has_parent = 1;
     else
         c.has_parent = 0;
 
+    //Populate author and timestamp metadata
     const char *author = pes_author();
     if (!author) author = "unknown";
 
@@ -217,15 +222,18 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
 
     c.timestamp = (uint64_t)time(NULL);
 
+    //Store commit message
     strncpy(c.message, message, sizeof(c.message) - 1);
     c.message[sizeof(c.message) - 1] = '\0';
 
+    //Serialize commit structure into text format
     void *data = NULL;
     size_t len = 0;
 
     if (commit_serialize(&c, &data, &len) != 0)
         return -1;
 
+    //Write commit object to object store
     if (object_write(OBJ_COMMIT, data, len, commit_id_out) != 0) {
         free(data);
         return -1;
@@ -233,6 +241,7 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
 
     free(data);
 
+    //Update HEAD to point to new commit
     if (head_update(commit_id_out) != 0)
         return -1;
 
