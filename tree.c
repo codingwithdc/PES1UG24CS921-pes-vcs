@@ -133,7 +133,6 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 // Returns 0 on success, -1 on error.
 
 
-// Recursive helper — now handling FILE entries
 static int build_tree_recursive(Index *index, const char *prefix, ObjectID *out_id) {
     Tree tree = {0};
     size_t prefix_len = strlen(prefix);
@@ -141,7 +140,6 @@ static int build_tree_recursive(Index *index, const char *prefix, ObjectID *out_
     for (size_t i = 0; i < index->count; i++) {
         IndexEntry *entry = &index->entries[i];
 
-        // Skip entries not belonging to this prefix
         if (prefix_len > 0 && strncmp(entry->path, prefix, prefix_len) != 0)
             continue;
 
@@ -150,24 +148,51 @@ static int build_tree_recursive(Index *index, const char *prefix, ObjectID *out_
         if (*remaining == '/')
             remaining++;
 
-        // Check if it's a file in current directory
         const char *slash = strchr(remaining, '/');
 
         if (!slash) {
             TreeEntry *te = &tree.entries[tree.count++];
-
             te->mode = entry->mode;
             strcpy(te->name, remaining);
             memcpy(te->hash.hash, entry->hash.hash, HASH_SIZE);
+        } else {
+            size_t dir_len = slash - remaining;
+
+            char dirname[256];
+            strncpy(dirname, remaining, dir_len);
+            dirname[dir_len] = '\0';
+
+            int exists = 0;
+            for (int j = 0; j < tree.count; j++) {
+                if (strcmp(tree.entries[j].name, dirname) == 0) {
+                    exists = 1;
+                    break;
+                }
+            }
+
+            if (!exists) {
+                char new_prefix[512];
+                if (prefix_len == 0)
+                    snprintf(new_prefix, sizeof(new_prefix), "%s", dirname);
+                else
+                    snprintf(new_prefix, sizeof(new_prefix), "%s/%s", prefix, dirname);
+
+                ObjectID sub_id;
+                if (build_tree_recursive(index, new_prefix, &sub_id) != 0)
+                    return -1;
+
+                TreeEntry *te = &tree.entries[tree.count++];
+                te->mode = MODE_DIR;
+                strcpy(te->name, dirname);
+                memcpy(te->hash.hash, sub_id.hash, HASH_SIZE);
+            }
         }
     }
 
-    // Not writing yet (next chunk)
     (void)out_id;
     return -1;
 }
 
-// Build a tree hierarchy from the current index
 int tree_from_index(ObjectID *id_out) {
     Index index = {0};
 
@@ -176,4 +201,3 @@ int tree_from_index(ObjectID *id_out) {
 
     return build_tree_recursive(&index, "", id_out);
 }
-
