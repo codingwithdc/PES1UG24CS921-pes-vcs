@@ -133,19 +133,37 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 // Returns 0 on success, -1 on error.
 
 
-// Recursive helper
+// Recursive helper — now handling FILE entries
 static int build_tree_recursive(Index *index, const char *prefix, ObjectID *out_id) {
     Tree tree = {0};
     size_t prefix_len = strlen(prefix);
 
-    //blank for now
+    for (size_t i = 0; i < index->count; i++) {
+        IndexEntry *entry = &index->entries[i];
 
-    (void)index;
-    (void)prefix;
+        // Skip entries not belonging to this prefix
+        if (prefix_len > 0 && strncmp(entry->path, prefix, prefix_len) != 0)
+            continue;
+
+        const char *remaining = entry->path + prefix_len;
+
+        if (*remaining == '/')
+            remaining++;
+
+        // Check if it's a file in current directory
+        const char *slash = strchr(remaining, '/');
+
+        if (!slash) {
+            TreeEntry *te = &tree.entries[tree.count++];
+
+            te->mode = entry->mode;
+            strcpy(te->name, remaining);
+            memcpy(te->hash.hash, entry->hash.hash, HASH_SIZE);
+        }
+    }
+
+    // Not writing yet (next chunk)
     (void)out_id;
-    (void)tree;
-    (void)prefix_len;
-
     return -1;
 }
 
@@ -158,3 +176,4 @@ int tree_from_index(ObjectID *id_out) {
 
     return build_tree_recursive(&index, "", id_out);
 }
+
