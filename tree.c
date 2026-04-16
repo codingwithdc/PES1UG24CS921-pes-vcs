@@ -26,8 +26,6 @@
 
 // ─── PROVIDED ───────────────────────────────────────────────────────────────
 
-// (UNCHANGED PROVIDED CODE HERE — keep everything exactly same)
-
 // Determine the object mode for a filesystem path.
 uint32_t get_file_mode(const char *path) {
     struct stat st;
@@ -133,10 +131,30 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //   - object_write    : save that binary buffer to the store as OBJ_TREE
 //
 // Returns 0 on success, -1 on error.
-int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
+
+
+// Recursive helper
+static int build_tree_recursive(Index *index, const char *prefix, ObjectID *out_id) {
+    Tree tree = {0};
+    size_t prefix_len = strlen(prefix);
+
+    //blank for now
+
+    (void)index;
+    (void)prefix;
+    (void)out_id;
+    (void)tree;
+    (void)prefix_len;
+
     return -1;
 }
 
+// Build a tree hierarchy from the current index
+int tree_from_index(ObjectID *id_out) {
+    Index index = {0};
+
+    if (index_load(&index) != 0)
+        return -1;
+
+    return build_tree_recursive(&index, "", id_out);
+}
