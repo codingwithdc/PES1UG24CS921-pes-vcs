@@ -209,5 +209,16 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     else
         c.has_parent = 0;
 
+    const char *author = pes_author();
+    if (!author) author = "unknown";
+
+    strncpy(c.author, author, sizeof(c.author) - 1);
+    c.author[sizeof(c.author) - 1] = '\0';
+
+    c.timestamp = (uint64_t)time(NULL);
+
+    strncpy(c.message, message, sizeof(c.message) - 1);
+    c.message[sizeof(c.message) - 1] = '\0';
+
     return -1;
 }
