@@ -94,87 +94,71 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    // Step 1: header
-    char header[64];
     const char *type_str;
-
     if (type == OBJ_BLOB) type_str = "blob";
     else if (type == OBJ_TREE) type_str = "tree";
     else if (type == OBJ_COMMIT) type_str = "commit";
     else return -1;
 
-    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
-    if (header_len < 0) return -1;
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len) + 1;
 
-    size_t total_len = header_len + 1 + len;
+    size_t total_len = header_len + len;
+    unsigned char *buf = malloc(total_len);
+    if (!buf) return -1;
 
-    // Step 2: build full object
-    char *full = malloc(total_len);
-    if (!full) return -1;
+    memcpy(buf, header, header_len);
+    memcpy(buf + header_len, data, len);
 
-    memcpy(full, header, header_len);
-    full[header_len] = '\0';
-    memcpy(full + header_len + 1, data, len);
+    compute_hash(buf, total_len, id_out);
 
-    // Step 3: compute hash
-    ObjectID id;
-    compute_hash(full, total_len, &id);
-
-    // Step 4: deduplication
-    if (object_exists(&id)) {
-        *id_out = id;
-        free(full);
+    if (object_exists(id_out)) {
+        free(buf);
         return 0;
     }
 
-    // Step 5: get object path
     char path[512];
-    object_path(&id, path, sizeof(path));
+    object_path(id_out, path, sizeof(path));
 
-    // extract directory path
+    mkdir(".pes", 0755);
+    mkdir(".pes/objects", 0755);
+
     char dir[512];
     strncpy(dir, path, sizeof(dir));
+    dir[sizeof(dir) - 1] = '\0';
+
     char *slash = strrchr(dir, '/');
     if (!slash) {
-        free(full);
+        free(buf);
         return -1;
     }
     *slash = '\0';
 
-    // create directory if needed
     mkdir(dir, 0755);
 
-    // Step 6: write to temp file
     char temp_path[512];
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
 
     int fd = open(temp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (fd < 0) {
-        free(full);
+        free(buf);
         return -1;
     }
 
-    if (write(fd, full, total_len) != (ssize_t)total_len) {
+    if (write(fd, buf, total_len) != (ssize_t)total_len) {
         close(fd);
-        free(full);
+        free(buf);
         return -1;
     }
 
     fsync(fd);
     close(fd);
 
-    // Step 7: atomic rename
-    if (rename(temp_path, path) != 0) {
-        free(full);
-        return -1;
-    }
+    rename(temp_path, path);
 
-    // Step 8: done
-    *id_out = id;
-    free(full);
+    free(buf);
     return 0;
 }
-
 
 // Read an object from the store.
 //
