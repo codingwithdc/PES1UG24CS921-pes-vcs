@@ -220,5 +220,21 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     strncpy(c.message, message, sizeof(c.message) - 1);
     c.message[sizeof(c.message) - 1] = '\0';
 
-    return -1;
+    void *data = NULL;
+    size_t len = 0;
+
+    if (commit_serialize(&c, &data, &len) != 0)
+        return -1;
+
+    if (object_write(OBJ_COMMIT, data, len, commit_id_out) != 0) {
+        free(data);
+        return -1;
+    }
+
+    free(data);
+
+    if (head_update(commit_id_out) != 0)
+        return -1;
+
+    return 0;
 }
